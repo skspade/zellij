@@ -16,10 +16,10 @@ use zellij_client::{
 
 use zellij_utils::sessions::{
     assert_dead_session, assert_session, assert_session_ne, delete_session as delete_session_impl,
-    generate_unique_session_name, get_active_session, get_resurrectable_sessions, get_sessions,
-    get_sessions_sorted_by_mtime, kill_session as kill_session_impl, match_session_name,
-    print_sessions, print_sessions_with_index, resurrection_layout, session_exists, ActiveSession,
-    SessionNameMatch,
+    generate_unique_session_name, get_active_session, get_git_repo_name, get_resurrectable_sessions,
+    get_sessions, get_sessions_sorted_by_mtime, kill_session as kill_session_impl,
+    match_session_name, print_sessions, print_sessions_with_index, resurrection_layout,
+    session_exists, ActiveSession, SessionNameMatch,
 };
 
 use zellij_utils::consts::session_layout_cache_file_name;
@@ -857,19 +857,40 @@ pub(crate) fn start_client(opts: CliArgs) {
                     process::exit(0);
                 }
 
-                let session_name = generate_unique_session_name_or_exit();
-                start_client_plan(session_name.clone());
-                reconnect_to_session = start_client_impl(
-                    Box::new(os_input),
-                    opts,
-                    config,
-                    config_options,
-                    ClientInfo::New(session_name, layout_info, new_session_cwd),
-                    None,
-                    None,
-                    is_a_reconnect,
-                    should_create_detached,
-                );
+                // Try Git repo name first (attach or create)
+                if let Some(git_session_name) = get_git_repo_name() {
+                    let client = attach_with_session_name(
+                        Some(git_session_name),
+                        config_options.clone(),
+                        true,
+                    );
+                    reconnect_to_session = start_client_impl(
+                        Box::new(os_input),
+                        opts,
+                        config,
+                        config_options,
+                        client,
+                        None,
+                        None,
+                        is_a_reconnect,
+                        should_create_detached,
+                    );
+                } else {
+                    // Fallback: generate random name
+                    let session_name = generate_unique_session_name_or_exit();
+                    start_client_plan(session_name.clone());
+                    reconnect_to_session = start_client_impl(
+                        Box::new(os_input),
+                        opts,
+                        config,
+                        config_options,
+                        ClientInfo::New(session_name, layout_info, new_session_cwd),
+                        None,
+                        None,
+                        is_a_reconnect,
+                        should_create_detached,
+                    );
+                }
             }
         }
         if reconnect_to_session.is_none() {
