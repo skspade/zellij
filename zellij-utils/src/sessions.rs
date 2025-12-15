@@ -457,6 +457,32 @@ pub fn assert_session_ne(name: &str) {
     process::exit(1);
 }
 
+/// Detects if current directory is in a Git repo and returns the repo name.
+/// Returns None if not in a Git repo or if the name would be invalid.
+pub fn get_git_repo_name() -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let path = String::from_utf8(output.stdout).ok()?;
+    let repo_name = std::path::Path::new(path.trim())
+        .file_name()?
+        .to_str()?
+        .to_string();
+
+    // Validate: not empty, no "/", not "." or ".."
+    if repo_name.is_empty() || repo_name.contains('/') || repo_name == "." || repo_name == ".." {
+        return None;
+    }
+
+    Some(repo_name)
+}
+
 pub fn generate_unique_session_name() -> Option<String> {
     let sessions = get_sessions().map(|sessions| {
         sessions
